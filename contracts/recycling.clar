@@ -1,30 +1,36 @@
+(define-data-var next-event-id uint u0)
 
-;; title: recycling
-;; version:
-;; summary:
-;; description:
+(define-map recycling-events
+  { id: uint }
+  {
+    product-id: uint,
+    recycler: principal,
+    amount: uint
+  }
+)
 
-;; traits
-;;
+(define-fungible-token recycling-token)
 
-;; token definitions
-;;
+(define-public (recycle-product (product-id uint) (amount uint))
+  (let ((event-id (var-get next-event-id)))
+    (var-set next-event-id (+ event-id u1))
+    (try! (ft-mint? recycling-token amount tx-sender))
+    (ok (map-set recycling-events
+      { id: event-id }
+      {
+        product-id: product-id,
+        recycler: tx-sender,
+        amount: amount
+      }
+    ))
+  )
+)
 
-;; constants
-;;
+(define-read-only (get-recycling-event (event-id uint))
+  (map-get? recycling-events { id: event-id })
+)
 
-;; data vars
-;;
-
-;; data maps
-;;
-
-;; public functions
-;;
-
-;; read only functions
-;;
-
-;; private functions
-;;
+(define-read-only (get-recycling-balance (account principal))
+  (ok (ft-get-balance recycling-token account))
+)
 
