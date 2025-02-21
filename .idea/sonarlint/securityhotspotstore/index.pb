@@ -7,3 +7,5 @@ O
 tests/product-lifecycle.test.ts,e/e/ee7566aced17ac1d2087e27776fea5c38fa444b4
 H
 contracts/recycling.clar,8/7/87f073b600951b146b85227a9604076b0a28a1d2
+J
+contracts/marketplace.clar,e/2/e2a45a6789a1d0483fc133fffb49ff482a2e137b
