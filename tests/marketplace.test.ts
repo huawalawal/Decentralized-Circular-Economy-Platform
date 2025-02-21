@@ -1,74 +1,84 @@
 import { describe, it, beforeEach, expect } from "vitest"
 
-describe("Product Lifecycle Contract", () => {
+describe("Marketplace Contract", () => {
   let mockStorage: Map<string, any>
-  let productNonce: number
+  let listingNonce: number
+  let tokenBalances: Map<string, number>
   
   beforeEach(() => {
     mockStorage = new Map()
-    productNonce = 0
+    listingNonce = 0
+    tokenBalances = new Map()
   })
   
   const mockContractCall = (method: string, args: any[], sender: string) => {
     switch (method) {
-      case "create-product":
-        const [name] = args
-        productNonce++
-        mockStorage.set(`product-${productNonce}`, {
-          name,
-          manufacturer: sender,
-          owner: sender,
-          status: "created",
+      case "create-listing":
+        const [productId, price] = args
+        listingNonce++
+        mockStorage.set(`listing-${listingNonce}`, {
+          seller: sender,
+          "product-id": productId,
+          price,
+          active: true,
         })
-        return { success: true, value: productNonce }
+        return { success: true, value: listingNonce }
       
-      case "transfer-product":
-        const [productId, newOwner] = args
-        const product = mockStorage.get(`product-${productId}`)
-        if (!product) return { success: false, error: 404 }
-        if (product.owner !== sender) return { success: false, error: 403 }
-        product.owner = newOwner
-        mockStorage.set(`product-${productId}`, product)
+      case "buy-listing":
+        const [listingId] = args
+        const listing = mockStorage.get(`listing-${listingId}`)
+        if (!listing) return { success: false, error: 404 }
+        if (!listing.active) return { success: false, error: 400 }
+        if ((tokenBalances.get(sender) || 0) < listing.price) return { success: false, error: "Insufficient balance" }
+        tokenBalances.set(sender, (tokenBalances.get(sender) || 0) - listing.price)
+        tokenBalances.set(listing.seller, (tokenBalances.get(listing.seller) || 0) + listing.price)
+        listing.active = false
+        mockStorage.set(`listing-${listingId}`, listing)
         return { success: true }
       
-      case "get-product":
-        return { success: true, value: mockStorage.get(`product-${args[0]}`) }
+      case "get-listing":
+        return { success: true, value: mockStorage.get(`listing-${args[0]}`) }
       
       default:
         return { success: false, error: "Unknown method" }
     }
   }
   
-  it("should create a product", () => {
-    const result = mockContractCall("create-product", ["Test Product"], "user1")
+  it("should create a listing", () => {
+    const result = mockContractCall("create-listing", [1, 100], "user1")
     expect(result.success).toBe(true)
     expect(result.value).toBe(1)
   })
   
-  it("should retrieve a product", () => {
-    mockContractCall("create-product", ["Test Product"], "user1")
-    const result = mockContractCall("get-product", [1], "anyone")
+  it("should retrieve a listing", () => {
+    mockContractCall("create-listing", [1, 100], "user1")
+    const result = mockContractCall("get-listing", [1], "anyone")
     expect(result.success).toBe(true)
     expect(result.value).toEqual({
-      name: "Test Product",
-      manufacturer: "user1",
-      owner: "user1",
-      status: "created",
+      seller: "user1",
+      "product-id": 1,
+      price: 100,
+      active: true,
     })
   })
   
-  it("should transfer a product", () => {
-    mockContractCall("create-product", ["Test Product"], "user1")
-    const result = mockContractCall("transfer-product", [1, "user2"], "user1")
+  it("should buy a listing", () => {
+    mockContractCall("create-listing", [1, 100], "user1")
+    tokenBalances.set("user2", 200)
+    const result = mockContractCall("buy-listing", [1], "user2")
     expect(result.success).toBe(true)
-    const product = mockContractCall("get-product", [1], "anyone").value
-    expect(product.owner).toBe("user2")
+    const listing = mockContractCall("get-listing", [1], "anyone").value
+    expect(listing.active).toBe(false)
+    expect(tokenBalances.get("user1")).toBe(100)
+    expect(tokenBalances.get("user2")).toBe(100)
   })
   
-  it("should not transfer a product if not the owner", () => {
-    mockContractCall("create-product", ["Test Product"], "user1")
-    const result = mockContractCall("transfer-product", [1, "user3"], "user2")
+  it("should not buy a listing with insufficient balance", () => {
+    mockContractCall("create-listing", [1, 100], "user1")
+    tokenBalances.set("user2", 50)
+    const result = mockContractCall("buy-listing", [1], "user2")
     expect(result.success).toBe(false)
-    expect(result.error).toBe(403)
+    expect(result.error).toBe("Insufficient balance")
   })
 })
+
